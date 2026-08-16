@@ -171,17 +171,18 @@ router.put('/:id', async (req: Request, res: Response) => {
       { returnDocument: 'after' }
     );
 
-    if (!result.value) {
+    if (!result || !result.value) {
       return res.status(404).json({ success: false, message: 'Enrollment not found' });
     }
 
+    const updated = result.value!;
     res.json({
       success: true,
       data: {
-        id: result.value._id.toString(),
-        ...result.value,
-        student_id: result.value.student_id.toString(),
-        course_id: result.value.course_id.toString(),
+        id: updated._id.toString(),
+        ...updated,
+        student_id: updated.student_id.toString(),
+        course_id: updated.course_id.toString(),
       },
     });
   } catch (error: any) {

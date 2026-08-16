@@ -60,7 +60,7 @@ export function CoursesPage() {
       setCourses((coursesData ?? []) as Course[]);
       
       const counts: Record<string, number> = {};
-      (enrollmentsData ?? []).forEach((e: any) => {
+      ((enrollmentsData ?? []) as any[]).forEach((e: any) => {
         counts[e.course_id] = (counts[e.course_id] ?? 0) + 1;
       });
       setEnrollmentCounts(counts);

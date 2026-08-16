@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    environment:
+      MONGODB_URI: ${MONGODB_URI}
+      DB_NAME: ${DB_NAME}
+      NODE_ENV: production
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Usage:
+# 1) Create a .env file or export MONGODB_URI and DB_NAME in your shell.
+#    Example (.env):
+#      MONGODB_URI=mongodb+srv://<user>:<password>@cluster0.mongodb.net
+#      DB_NAME=student_management
+# 2) Start services: docker compose up -d
+# 3) Check logs: docker compose logs -f
+# Note: On production droplets, secure environment variables and firewall ports.

@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const response = await api.auth.login(email, password);
+      const response: any = await api.auth.login(email, password);
       const newSession: Session = {
         user: {
           id: response.id,
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     try {
-      const response = await api.auth.signup(email, password);
+      const response: any = await api.auth.signup(email, password);
       const newSession: Session = {
         user: {
           id: response.id,

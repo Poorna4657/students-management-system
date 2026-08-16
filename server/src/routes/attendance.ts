@@ -131,16 +131,21 @@ router.post('/', async (req: Request, res: Response) => {
         },
         { returnDocument: 'after' }
       );
+ 
+      if (!result || !result.value) {
+        return res.status(404).json({ success: false, message: 'Attendance record not found' });
+      }
 
+      const updated = result.value!;
       return res.json({
         success: true,
         data: {
-          id: result.value._id.toString(),
-          student_id: result.value.student_id.toString(),
-          course_id: result.value.course_id.toString(),
-          date: result.value.date,
-          status: result.value.status,
-          notes: result.value.notes,
+          id: updated._id.toString(),
+          student_id: updated.student_id.toString(),
+          course_id: updated.course_id.toString(),
+          date: updated.date,
+          status: updated.status,
+          notes: updated.notes,
         },
       });
     }

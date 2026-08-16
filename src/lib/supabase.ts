@@ -82,24 +82,25 @@ export const api = {
   },
 };
 
-// For backward compatibility, export a supabase-like object
+// For backward compatibility, export a supabase-like object (lightweight mock with chainable API)
+function emptyResult() {
+  return { data: [], error: null, count: 0 } as any;
+}
+
+function chainableResult() {
+  const base = emptyResult();
+  return {
+    ...base,
+    order: (_: any) => ({ ...base, limit: (_n: number) => base }),
+    limit: (_n: number) => base,
+  } as any;
+}
+
 export const supabase = {
-  from: (table: string) => ({
-    select: (fields?: string) => ({
-      data: [],
-      error: null,
-    }),
-    insert: (data: any) => ({
-      data: data,
-      error: null,
-    }),
-    update: (data: any) => ({
-      data: data,
-      error: null,
-    }),
-    delete: () => ({
-      data: null,
-      error: null,
-    }),
+  from: (_table: string) => ({
+    select: (_fields?: string, _opts?: any) => chainableResult(),
+    insert: (data: any) => ({ data, error: null }),
+    update: (data: any) => ({ data, error: null }),
+    delete: () => ({ data: null, error: null }),
   }),
 };

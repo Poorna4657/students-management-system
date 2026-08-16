@@ -116,15 +116,16 @@ router.put('/:id', async (req: Request, res: Response) => {
       { returnDocument: 'after' }
     );
 
-    if (!result.value) {
+    if (!result || !result.value) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
+    const updated = result.value!;
     res.json({
       success: true,
       data: {
-        id: result.value._id.toString(),
-        ...result.value,
+        id: updated._id.toString(),
+        ...updated,
         _id: undefined,
       },
     });

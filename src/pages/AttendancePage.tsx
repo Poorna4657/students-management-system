@@ -78,7 +78,7 @@ export function AttendancePage() {
       const data = await api.attendance.getByDate(selectedCourse, selectedDate);
       const existing: Record<string, Attendance> = {};
       const marksMap: Record<string, AttendanceStatus> = {};
-      (data ?? []).forEach((a: any) => {
+      ((data ?? []) as any[]).forEach((a: any) => {
         existing[a.student_id] = a as Attendance;
         marksMap[a.student_id] = a.status as AttendanceStatus;
       });
