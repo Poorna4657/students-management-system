@@ -10,7 +10,7 @@ import {
   MapPin,
   Filter,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/supabase';
 import { Student, StudentStatus, Gender, StudentInput } from '@/types';
 import { formatDate, getInitials, getFullName, getAge } from '@/lib/format';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -49,14 +49,11 @@ export function StudentsPage() {
 
   const loadStudents = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      notify('error', 'Failed to load students');
-    } else {
+    try {
+      const data = await api.students.list();
       setStudents((data ?? []) as Student[]);
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to load students');
     }
     setLoading(false);
   };
@@ -110,24 +107,18 @@ export function StudentsPage() {
       address: form.address || null,
     };
 
-    if (editing) {
-      const { error } = await supabase.from('students').update(payload).eq('id', editing.id);
-      if (error) {
-        notify('error', error.message);
-      } else {
+    try {
+      if (editing) {
+        await api.students.update(editing.id, payload);
         notify('success', 'Student updated successfully');
-        setModalOpen(false);
-        loadStudents();
-      }
-    } else {
-      const { error } = await supabase.from('students').insert(payload);
-      if (error) {
-        notify('error', error.message);
       } else {
+        await api.students.create(payload);
         notify('success', 'Student added successfully');
-        setModalOpen(false);
-        loadStudents();
       }
+      setModalOpen(false);
+      loadStudents();
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to save student');
     }
     setSaving(false);
   };
@@ -137,12 +128,12 @@ export function StudentsPage() {
       title: 'Delete Student',
       message: `Are you sure you want to delete ${getFullName(student.first_name, student.last_name)}? This will also remove all their enrollments and attendance records.`,
       onConfirm: async () => {
-        const { error } = await supabase.from('students').delete().eq('id', student.id);
-        if (error) {
-          notify('error', error.message);
-        } else {
+        try {
+          await api.students.delete(student.id);
           notify('success', 'Student deleted');
           loadStudents();
+        } catch (error: any) {
+          notify('error', error.message || 'Failed to delete student');
         }
       },
     });

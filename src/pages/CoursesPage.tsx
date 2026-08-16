@@ -9,7 +9,7 @@ import {
   Filter,
   GraduationCap,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/supabase';
 import { Course, CourseStatus, CourseInput, Student, Enrollment } from '@/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Modal } from '@/components/Modal';
@@ -52,23 +52,20 @@ export function CoursesPage() {
 
   const loadCourses = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('courses')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) {
-      notify('error', 'Failed to load courses');
-    } else {
-      setCourses((data ?? []) as Course[]);
-      // Load enrollment counts
-      const { data: enrollData } = await supabase
-        .from('enrollments')
-        .select('course_id');
+    try {
+      const [coursesData, enrollmentsData] = await Promise.all([
+        api.courses.list(),
+        api.enrollments.list(),
+      ]);
+      setCourses((coursesData ?? []) as Course[]);
+      
       const counts: Record<string, number> = {};
-      (enrollData ?? []).forEach((e: any) => {
+      (enrollmentsData ?? []).forEach((e: any) => {
         counts[e.course_id] = (counts[e.course_id] ?? 0) + 1;
       });
       setEnrollmentCounts(counts);
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to load courses');
     }
     setLoading(false);
   };
@@ -120,24 +117,18 @@ export function CoursesPage() {
       instructor: form.instructor || null,
     };
 
-    if (editing) {
-      const { error } = await supabase.from('courses').update(payload).eq('id', editing.id);
-      if (error) {
-        notify('error', error.message);
-      } else {
+    try {
+      if (editing) {
+        await api.courses.update(editing.id, payload);
         notify('success', 'Course updated successfully');
-        setModalOpen(false);
-        loadCourses();
-      }
-    } else {
-      const { error } = await supabase.from('courses').insert(payload);
-      if (error) {
-        notify('error', error.message);
       } else {
+        await api.courses.create(payload);
         notify('success', 'Course added successfully');
-        setModalOpen(false);
-        loadCourses();
       }
+      setModalOpen(false);
+      loadCourses();
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to save course');
     }
     setSaving(false);
   };
@@ -147,12 +138,12 @@ export function CoursesPage() {
       title: 'Delete Course',
       message: `Are you sure you want to delete ${course.code} - ${course.title}? This will also remove all enrollments and attendance for this course.`,
       onConfirm: async () => {
-        const { error } = await supabase.from('courses').delete().eq('id', course.id);
-        if (error) {
-          notify('error', error.message);
-        } else {
+        try {
+          await api.courses.delete(course.id);
           notify('success', 'Course deleted');
           loadCourses();
+        } catch (error: any) {
+          notify('error', error.message || 'Failed to delete course');
         }
       },
     });
@@ -160,46 +151,47 @@ export function CoursesPage() {
 
   const openEnrollments = async (course: Course) => {
     setEnrollModalCourse(course);
-    const [enrollRes, studentsRes] = await Promise.all([
-      supabase
-        .from('enrollments')
-        .select('*, student:students(id, first_name, last_name, email)')
-        .eq('course_id', course.id)
-        .order('created_at', { ascending: false }),
-      supabase.from('students').select('*').eq('status', 'active').order('first_name'),
-    ]);
-    setEnrollments((enrollRes.data ?? []) as unknown as Enrollment[]);
-    setAllStudents((studentsRes.data ?? []) as Student[]);
-    setSelectedStudent('');
+    try {
+      const [enrollmentsData, studentsData] = await Promise.all([
+        api.enrollments.getByCourse(course.id),
+        api.students.list(),
+      ]);
+      setEnrollments((enrollmentsData ?? []) as Enrollment[]);
+      setAllStudents(((studentsData ?? []) as Student[]).filter((s: Student) => s.status === 'active'));
+      setSelectedStudent('');
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to load enrollments');
+    }
   };
 
   const handleEnroll = async () => {
     if (!enrollModalCourse || !selectedStudent || enrollLoading) return;
     setEnrollLoading(true);
-    const { error } = await supabase.from('enrollments').insert({
-      student_id: selectedStudent,
-      course_id: enrollModalCourse.id,
-      status: 'enrolled',
-    });
-    if (error) {
-      notify('error', error.message.includes('duplicate') ? 'Student already enrolled' : error.message);
-    } else {
+    try {
+      await api.enrollments.create({
+        student_id: selectedStudent,
+        course_id: enrollModalCourse.id,
+        status: 'enrolled',
+      });
       notify('success', 'Student enrolled');
       await openEnrollments(enrollModalCourse);
       loadCourses();
+    } catch (error: any) {
+      const message = error.message?.includes('duplicate') ? 'Student already enrolled' : error.message;
+      notify('error', message || 'Failed to enroll student');
     }
     setEnrollLoading(false);
   };
 
   const handleUnenroll = async (enrollmentId: string) => {
     if (!enrollModalCourse) return;
-    const { error } = await supabase.from('enrollments').delete().eq('id', enrollmentId);
-    if (error) {
-      notify('error', error.message);
-    } else {
+    try {
+      await api.enrollments.delete(enrollmentId);
       notify('success', 'Student removed from course');
       await openEnrollments(enrollModalCourse);
       loadCourses();
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to remove student');
     }
   };
 

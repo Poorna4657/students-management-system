@@ -10,7 +10,7 @@ import {
   Filter,
   Save,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/supabase';
 import {
   Student,
   Course,
@@ -51,12 +51,16 @@ export function AttendancePage() {
 
   useEffect(() => {
     async function load() {
-      const [studentsRes, coursesRes] = await Promise.all([
-        supabase.from('students').select('*').eq('status', 'active').order('first_name'),
-        supabase.from('courses').select('*').eq('status', 'active').order('title'),
-      ]);
-      setStudents((studentsRes.data ?? []) as Student[]);
-      setCourses((coursesRes.data ?? []) as Course[]);
+      try {
+        const [studentsData, coursesData] = await Promise.all([
+          api.students.list(),
+          api.courses.list(),
+        ]);
+        setStudents(((studentsData ?? []) as Student[]).filter((s) => s.status === 'active'));
+        setCourses(((coursesData ?? []) as Course[]).filter((c) => c.status === 'active'));
+      } catch (error: any) {
+        notify('error', error.message || 'Failed to load data');
+      }
       setLoading(false);
     }
     load();
@@ -70,20 +74,19 @@ export function AttendancePage() {
 
   const loadExistingAttendance = async () => {
     if (!selectedCourse || !selectedDate) return;
-    const { data } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('course_id', selectedCourse)
-      .eq('date', selectedDate);
-
-    const existing: Record<string, Attendance> = {};
-    const marksMap: Record<string, AttendanceStatus> = {};
-    (data ?? []).forEach((a: any) => {
-      existing[a.student_id] = a as Attendance;
-      marksMap[a.student_id] = a.status as AttendanceStatus;
-    });
-    setExistingAttendance(existing);
-    setMarks(marksMap);
+    try {
+      const data = await api.attendance.getByDate(selectedCourse, selectedDate);
+      const existing: Record<string, Attendance> = {};
+      const marksMap: Record<string, AttendanceStatus> = {};
+      (data ?? []).forEach((a: any) => {
+        existing[a.student_id] = a as Attendance;
+        marksMap[a.student_id] = a.status as AttendanceStatus;
+      });
+      setExistingAttendance(existing);
+      setMarks(marksMap);
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to load attendance');
+    }
   };
 
   // Load history
@@ -93,16 +96,11 @@ export function AttendancePage() {
 
   const loadHistory = async () => {
     setHistoryLoading(true);
-    const { data, error } = await supabase
-      .from('attendance')
-      .select('*, student:students(first_name, last_name), course:courses(code, title)')
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (error) {
-      notify('error', 'Failed to load attendance history');
-    } else {
-      setHistory((data ?? []) as AttendanceWithRelations[]);
+    try {
+      const data = await api.attendance.list();
+      setHistory(((data ?? []) as AttendanceWithRelations[]).slice(0, 100));
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to load attendance history');
     }
     setHistoryLoading(false);
   };
@@ -121,42 +119,30 @@ export function AttendancePage() {
     if (!selectedCourse || !selectedDate || saving) return;
     setSaving(true);
 
-    const toUpsert = Object.entries(marks).map(([studentId, status]) => ({
-      student_id: studentId,
-      course_id: selectedCourse,
-      date: selectedDate,
-      status,
-      user_id: undefined,
-    }));
+    try {
+      const attendanceRecords = Object.entries(marks).map(([studentId, status]) => ({
+        student_id: studentId,
+        course_id: selectedCourse,
+        date: selectedDate,
+        status,
+      }));
 
-    if (toUpsert.length === 0) {
-      notify('info', 'No attendance to save');
-      setSaving(false);
-      return;
-    }
+      if (attendanceRecords.length === 0) {
+        notify('info', 'No attendance to save');
+        setSaving(false);
+        return;
+      }
 
-    // Delete existing then insert (simpler than upsert since we need user_id default)
-    await supabase
-      .from('attendance')
-      .delete()
-      .eq('course_id', selectedCourse)
-      .eq('date', selectedDate);
+      // Save each attendance record
+      await Promise.all(
+        attendanceRecords.map((record) => api.attendance.create(record))
+      );
 
-    const { error } = await supabase.from('attendance').insert(
-      toUpsert.map((r) => ({
-        student_id: r.student_id,
-        course_id: r.course_id,
-        date: r.date,
-        status: r.status,
-      }))
-    );
-
-    if (error) {
-      notify('error', error.message);
-    } else {
-      notify('success', `Attendance saved for ${toUpsert.length} students`);
+      notify('success', `Attendance saved for ${attendanceRecords.length} students`);
       await loadExistingAttendance();
       await loadHistory();
+    } catch (error: any) {
+      notify('error', error.message || 'Failed to save attendance');
     }
     setSaving(false);
   };
@@ -174,12 +160,12 @@ export function AttendancePage() {
       title: 'Delete Attendance Record',
       message: `Delete attendance for ${record.student.first_name} ${record.student.last_name} on ${formatDate(record.date)}?`,
       onConfirm: async () => {
-        const { error } = await supabase.from('attendance').delete().eq('id', record.id);
-        if (error) {
-          notify('error', error.message);
-        } else {
+        try {
+          await api.attendance.delete(record.id);
           notify('success', 'Attendance record deleted');
           loadHistory();
+        } catch (error: any) {
+          notify('error', error.message || 'Failed to delete attendance');
         }
       },
     });

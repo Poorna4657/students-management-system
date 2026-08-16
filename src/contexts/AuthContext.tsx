@@ -1,6 +1,16 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/supabase';
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+interface Session {
+  user: User;
+  token: string;
+}
 
 interface AuthContextValue {
   session: Session | null;
@@ -18,33 +28,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
-      setLoading(false);
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    // Check if there's a saved session in localStorage
+    const savedSession = localStorage.getItem('auth_session');
+    if (savedSession) {
+      try {
+        const parsed = JSON.parse(savedSession);
+        setSession(parsed);
+      } catch (error) {
+        console.error('Failed to parse saved session:', error);
+      }
+    }
+    setLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const response = await api.auth.login(email, password);
+      const newSession: Session = {
+        user: {
+          id: response.id,
+          email: email,
+          name: response.email,
+        },
+        token: response.token,
+      };
+      setSession(newSession);
+      localStorage.setItem('auth_session', JSON.stringify(newSession));
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message || 'Login failed' };
+    }
   };
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error?.message ?? null };
+    try {
+      const response = await api.auth.signup(email, password);
+      const newSession: Session = {
+        user: {
+          id: response.id,
+          email: email,
+          name: response.name,
+        },
+        token: response.token,
+      };
+      setSession(newSession);
+      localStorage.setItem('auth_session', JSON.stringify(newSession));
+      return { error: null };
+    } catch (error: any) {
+      return { error: error.message || 'Signup failed' };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await api.auth.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+    setSession(null);
+    localStorage.removeItem('auth_session');
   };
 
   return (
