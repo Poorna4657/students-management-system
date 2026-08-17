@@ -12,6 +12,14 @@ export async function connectDB(): Promise<Db> {
   const mongoUrl = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const dbName = process.env.DB_NAME || 'student_management';
 
+  if ((process.env.VERCEL || process.env.NODE_ENV === 'production') && !process.env.MONGODB_URI) {
+    const errorMsg =
+      'MONGODB_URI environment variable is missing on Vercel/Production. ' +
+      'Please add MONGODB_URI (e.g. mongodb+srv://user:pass@cluster0.mongodb.net) in your Vercel Project Settings -> Environment Variables.';
+    console.error('✗ ' + errorMsg);
+    throw new Error(errorMsg);
+  }
+
   try {
     client = new MongoClient(mongoUrl);
     await client.connect();
@@ -28,8 +36,14 @@ export async function connectDB(): Promise<Db> {
     await seedDatabase(db);
 
     return db;
-  } catch (error) {
-    console.error('✗ MongoDB connection failed:', error);
+  } catch (error: any) {
+    console.error('✗ MongoDB connection failed:', error.message || error);
+    if (error.message && error.message.includes('ECONNREFUSED')) {
+      throw new Error(
+        `Failed to connect to MongoDB at "${mongoUrl}". ` +
+          `If hosting on Vercel, ensure you have set MONGODB_URI in Vercel Project Settings to a MongoDB Atlas cluster URI (mongodb+srv://...).`
+      );
+    }
     throw error;
   }
 }
