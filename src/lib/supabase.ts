@@ -1,5 +1,20 @@
-// MongoDB API Client
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+function getApiBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.trim() !== '') {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  // If in browser on localhost/127.0.0.1 without env var, default to local backend
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
+    return 'http://localhost:5000/api';
+  }
+
+  // Default relative fallback for co-located hosting / Nginx proxy
+  return '/api';
+}
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -13,7 +28,8 @@ async function apiCall<T>(
   endpoint: string,
   body?: any
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}${endpoint}`;
   const options: RequestInit = {
     method,
     headers: {
@@ -25,11 +41,37 @@ async function apiCall<T>(
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
-  const result: ApiResponse<T> = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(url, options);
+  } catch (fetchErr: any) {
+    throw new Error(
+      `Unable to connect to backend server at "${url}". Check if the backend is online.`
+    );
+  }
 
-  if (!result.success) {
-    throw new Error(result.message || 'API error');
+  const contentType = response.headers.get('content-type') || '';
+
+  if (!contentType.includes('application/json')) {
+    const responseText = await response.text();
+    const preview = responseText.slice(0, 80).replace(/\s+/g, ' ');
+    throw new Error(
+      `API endpoint "${url}" returned HTTP ${response.status} (${response.statusText}) instead of JSON. Response: "${preview}...". ` +
+        `If hosting frontend separately (e.g. Vercel/Netlify), set VITE_API_URL in your build environment variables.`
+    );
+  }
+
+  let result: ApiResponse<T>;
+  try {
+    result = await response.json();
+  } catch (jsonErr: any) {
+    throw new Error(
+      `Invalid JSON received from ${url} (HTTP ${response.status})`
+    );
+  }
+
+  if (!response.ok || !result.success) {
+    throw new Error(result?.message || `API Error (HTTP ${response.status})`);
   }
 
   return result.data as T;
