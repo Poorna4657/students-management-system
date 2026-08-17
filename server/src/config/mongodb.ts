@@ -44,6 +44,13 @@ export async function connectDB(): Promise<Db> {
           `If hosting on Vercel, ensure you have set MONGODB_URI in Vercel Project Settings to a MongoDB Atlas cluster URI (mongodb+srv://...).`
       );
     }
+    if (error.message && (error.message.includes('bad auth') || error.message.includes('Authentication failed'))) {
+      throw new Error(
+        `MongoDB Authentication Failed: The username or password in MONGODB_URI is incorrect. ` +
+          `Please check your Database User credentials in MongoDB Atlas (under Database Access). ` +
+          `Note: If your password contains special characters like '@' or '#', URL-encode them (e.g. '@' -> '%40', '#' -> '%23').`
+      );
+    }
     throw error;
   }
 }
