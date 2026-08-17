@@ -40,15 +40,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/students', studentRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/enrollments', enrollmentRoutes);
-app.use('/api/attendance', attendanceRoutes);
+// Routes (supports both with and without /api prefix for Vercel serverless rewrites)
+app.use(['/api/auth', '/auth'], authRoutes);
+app.use(['/api/students', '/students'], studentRoutes);
+app.use(['/api/courses', '/courses'], courseRoutes);
+app.use(['/api/enrollments', '/enrollments'], enrollmentRoutes);
+app.use(['/api/attendance', '/attendance'], attendanceRoutes);
 
 // Health check
-app.get('/api/health', (req: Request, res: Response) => {
+app.get(['/api/health', '/health'], (req: Request, res: Response) => {
   res.json({ status: 'ok' });
 });
 
