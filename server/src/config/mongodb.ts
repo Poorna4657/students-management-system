@@ -1,4 +1,5 @@
 import { MongoClient, Db } from 'mongodb';
+import { seedDatabase } from './seed.js';
 
 let client: MongoClient;
 let db: Db;
@@ -22,6 +23,9 @@ export async function connectDB(): Promise<Db> {
 
     // Create collections if they don't exist
     await createCollections(db);
+
+    // Seed initial data if empty
+    await seedDatabase(db);
 
     return db;
   } catch (error) {

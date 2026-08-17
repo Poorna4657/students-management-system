@@ -72,7 +72,9 @@ router.get('/course/:courseId', async (req: Request, res: Response) => {
       .aggregate([
         {
           $match: {
-            course_id: req.params.courseId,
+            course_id: ObjectId.isValid(req.params.courseId)
+              ? new ObjectId(req.params.courseId)
+              : req.params.courseId,
           },
         },
         {
@@ -93,8 +95,8 @@ router.get('/course/:courseId', async (req: Request, res: Response) => {
       success: true,
       data: enrollments.map((enrollment) => ({
         id: enrollment._id.toString(),
-        student_id: enrollment.student_id,
-        course_id: enrollment.course_id,
+        student_id: enrollment.student_id.toString(),
+        course_id: enrollment.course_id.toString(),
         enrollment_date: enrollment.enrollment_date,
         grade: enrollment.grade,
         status: enrollment.status,
@@ -171,11 +173,12 @@ router.put('/:id', async (req: Request, res: Response) => {
       { returnDocument: 'after' }
     );
 
-    if (!result || !result.value) {
+    const updated: any = (result && 'value' in result) ? result.value : result;
+
+    if (!updated) {
       return res.status(404).json({ success: false, message: 'Enrollment not found' });
     }
 
-    const updated = result.value!;
     res.json({
       success: true,
       data: {

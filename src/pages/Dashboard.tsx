@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, BookOpen, CalendarCheck, GraduationCap, TrendingUp, UserPlus, BookPlus } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/supabase';
 import { Student, Course, Attendance } from '@/types';
 import { formatDate, getInitials, getFullName } from '@/lib/format';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -26,49 +26,47 @@ export function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      const [studentsRes, coursesRes, enrollmentsRes, attendanceRes] = await Promise.all([
-        supabase.from('students').select('*'),
-        supabase.from('courses').select('*'),
-        supabase.from('enrollments').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('attendance')
-          .select('*, student:students(first_name, last_name), course:courses(code, title)')
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ]);
+      try {
+        const [studentsData, coursesData, enrollmentsData, attendanceData] = await Promise.all([
+          api.students.list(),
+          api.courses.list(),
+          api.enrollments.list(),
+          api.attendance.list(),
+        ]);
 
-      const students = (studentsRes.data ?? []) as Student[];
-      const courses = (coursesRes.data ?? []) as Course[];
+        const students = (studentsData ?? []) as Student[];
+        const courses = (coursesData ?? []) as Course[];
+        const enrollments = (enrollmentsData ?? []) as any[];
+        const attendance = (attendanceData ?? []) as any[];
 
-      const today = new Date().toISOString().split('T')[0];
-      const todayRecords = (attendanceRes.data ?? []).filter(
-        (a: any) => a.date === today
-      );
+        const today = new Date().toISOString().split('T')[0];
+        const todayRecords = attendance.filter((a: any) => a.date === today);
 
-      setStats({
-        totalStudents: students.length,
-        activeStudents: students.filter((s) => s.status === 'active').length,
-        totalCourses: courses.length,
-        activeCourses: courses.filter((c) => c.status === 'active').length,
-        totalEnrollments: enrollmentsRes.count ?? 0,
-        attendanceToday: {
-          present: todayRecords.filter((a: any) => a.status === 'present').length,
-          absent: todayRecords.filter((a: any) => a.status === 'absent').length,
-          late: todayRecords.filter((a: any) => a.status === 'late').length,
-          total: todayRecords.length,
-        },
-      });
+        setStats({
+          totalStudents: students.length,
+          activeStudents: students.filter((s) => s.status === 'active').length,
+          totalCourses: courses.length,
+          activeCourses: courses.filter((c) => c.status === 'active').length,
+          totalEnrollments: enrollments.length,
+          attendanceToday: {
+            present: todayRecords.filter((a: any) => a.status === 'present').length,
+            absent: todayRecords.filter((a: any) => a.status === 'absent').length,
+            late: todayRecords.filter((a: any) => a.status === 'late').length,
+            total: todayRecords.length,
+          },
+        });
 
-      setRecentStudents(
-        [...students].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5)
-      );
-      setRecentAttendance(
-        (attendanceRes.data ?? []) as (Attendance & {
-          student: Pick<Student, 'first_name' | 'last_name'>;
-          course: Pick<Course, 'code' | 'title'>;
-        })[]
-      );
-      setLoading(false);
+        setRecentStudents(
+          [...students]
+            .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+            .slice(0, 5)
+        );
+        setRecentAttendance(attendance.slice(0, 5));
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
