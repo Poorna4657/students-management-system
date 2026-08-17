@@ -24,6 +24,16 @@ app.use(
 );
 app.use(express.json());
 
+// Ensure database connection middleware (crucial for serverless platforms like Vercel)
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Request logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`${req.method} ${req.path}`);
@@ -51,13 +61,11 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Start server
+// Start server (only when not running in Vercel serverless environment)
 async function startServer() {
   try {
-    // Connect to MongoDB
     await connectDB();
 
-    // Start listening
     app.listen(port, () => {
       console.log(`\n✓ Server is running on http://localhost:${port}`);
       console.log(`✓ API is ready at http://localhost:${port}/api\n`);
@@ -68,6 +76,8 @@ async function startServer() {
   }
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
 
 export default app;
